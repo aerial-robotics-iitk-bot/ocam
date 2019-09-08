@@ -186,6 +186,9 @@ private:
         // loop to publish images;
         cv::Mat camera_image;
 
+        std::vector<double> camMat;
+        for(int i=0; i<9; i++){ camMat.push_back(camera_info.K[i]); }
+    
         ros::Rate r(frame_rate_);
 
         while (ros::ok())
@@ -200,6 +203,7 @@ private:
             }
 
             if (camera_image_pub.getNumSubscribers() > 0) {
+                cv::undistort(camera_image, camera_image, camMat, camera_info.D);
                 publishImage(camera_image, camera_image_pub, "camera_frame", now);
             }
 
