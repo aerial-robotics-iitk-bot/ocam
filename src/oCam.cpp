@@ -147,6 +147,9 @@ private:
      */
     void publishImage(cv::Mat img, image_transport::Publisher &img_pub, std::string img_frame_id, ros::Time t) {
         cv_bridge::CvImage cv_image;
+        // cv::Mat und_img, camMat(3,3,CV_32FC1, &(cinfo.K));
+        // cv::undistort(img, und_img, camMat, cinfo.D);
+        // cv_image.image = und_img;
         cv_image.image = img;
         cv_image.encoding = sensor_msgs::image_encodings::BGR8;
         cv_image.header.frame_id = img_frame_id;
@@ -184,10 +187,24 @@ private:
         ROS_INFO("Got camera calibration files");
 
         // loop to publish images;
-        cv::Mat camera_image;
+        cv::Mat camera_image, undist_image;
+        cv::Mat intrinsic = cv::Mat_<double>(3,3);
+        cv::Mat distCoeffs = cv::Mat_<double>(1,5);
 
-        std::vector<double> camMat;
-        for(int i=0; i<9; i++){ camMat.push_back(camera_info.K[i]); }
+        for(int i=0; i<5; i++)
+        {
+            distCoeffs.at<double>(i) = camera_info.D[i];
+        }
+
+        int tempID = 0;
+        for(int i=0; i<3; i++)
+        {
+            for(int j=0; j<3; j++)
+            {
+                intrinsic.at<double>(i,j) = camera_info.K[tempID++];
+            }
+        }
+
     
         ros::Rate r(frame_rate_);
 
@@ -203,8 +220,8 @@ private:
             }
 
             if (camera_image_pub.getNumSubscribers() > 0) {
-                cv::undistort(camera_image, camera_image, camMat, camera_info.D);
-                publishImage(camera_image, camera_image_pub, "camera_frame", now);
+                cv::undistort(camera_image, undist_image, intrinsic, distCoeffs);
+                publishImage(undist_image, camera_image_pub, "camera_frame", now);
             }
 
             if (camera_info_pub.getNumSubscribers() > 0) {
