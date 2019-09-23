@@ -118,6 +118,7 @@ private:
     int exposure_, gain_, wb_blue_, wb_red_;
     bool show_image_;
     bool config_changed_;
+    bool do_undistort_;
     std::string device_id_;
     std::string camera_name_;
     std::string device_info_;
@@ -220,7 +221,12 @@ private:
             }
 
             if (camera_image_pub.getNumSubscribers() > 0) {
-                cv::undistort(camera_image, undist_image, intrinsic, distCoeffs);
+                if (do_undistort_) {
+                  cv::undistort(camera_image, undist_image, intrinsic, distCoeffs);
+                } else {
+                  undist_image = camera_image;
+                }
+
                 publishImage(undist_image, camera_image_pub, "camera_frame", now);
             }
 
@@ -240,10 +246,10 @@ private:
 
     void callback(ocam::camConfig &config, uint32_t level) {
         ocam->uvc_control(config.exposure, config.gain, config.wb_blue, config.wb_red);
+        do_undistort_ = config.undistort;
     }
 
-
-public:
+  public:
     /**
 	 * @brief      { function_description }
 	 *
@@ -263,6 +269,7 @@ public:
         wb_red_ = 160;
         camera_frame_id_ = "camera";
         show_image_ = true;
+        do_undistort_ = true;
         camera_name_ = "ocam";
         device_info_ = "package://ocam/config/camera.yaml";
 
@@ -279,6 +286,7 @@ public:
         priv_nh.getParam("show_image", show_image_);
         priv_nh.getParam("camera_name", camera_name_);
         priv_nh.getParam("device_info", device_info_);
+        priv_nh.getParam("undistort", do_undistort_);
 
         /* initialize the camera */
         ocam = new Camera(device_id_, resolution_, frame_rate_);
