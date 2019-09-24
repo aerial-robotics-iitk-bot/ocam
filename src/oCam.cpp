@@ -118,6 +118,7 @@ private:
     int exposure_, gain_, wb_blue_, wb_red_;
     bool show_image_;
     bool config_changed_;
+    bool do_undistort_;
     std::string device_id_;
     std::string camera_name_;
     std::string device_info_;
@@ -147,6 +148,9 @@ private:
      */
     void publishImage(cv::Mat img, image_transport::Publisher &img_pub, std::string img_frame_id, ros::Time t) {
         cv_bridge::CvImage cv_image;
+        // cv::Mat und_img, camMat(3,3,CV_32FC1, &(cinfo.K));
+        // cv::undistort(img, und_img, camMat, cinfo.D);
+        // cv_image.image = und_img;
         cv_image.image = img;
         cv_image.encoding = sensor_msgs::image_encodings::BGR8;
         cv_image.header.frame_id = img_frame_id;
@@ -184,8 +188,25 @@ private:
         ROS_INFO("Got camera calibration files");
 
         // loop to publish images;
-        cv::Mat camera_image;
+        cv::Mat camera_image, undist_image;
+        cv::Mat intrinsic = cv::Mat_<double>(3,3);
+        cv::Mat distCoeffs = cv::Mat_<double>(1,5);
 
+        for(int i=0; i<5; i++)
+        {
+            distCoeffs.at<double>(i) = camera_info.D[i];
+        }
+
+        int tempID = 0;
+        for(int i=0; i<3; i++)
+        {
+            for(int j=0; j<3; j++)
+            {
+                intrinsic.at<double>(i,j) = camera_info.K[tempID++];
+            }
+        }
+
+    
         ros::Rate r(frame_rate_);
 
         while (ros::ok())
@@ -200,7 +221,13 @@ private:
             }
 
             if (camera_image_pub.getNumSubscribers() > 0) {
-                publishImage(camera_image, camera_image_pub, "camera_frame", now);
+                if (do_undistort_) {
+                  cv::undistort(camera_image, undist_image, intrinsic, distCoeffs);
+                } else {
+                  undist_image = camera_image;
+                }
+
+                publishImage(undist_image, camera_image_pub, "camera_frame", now);
             }
 
             if (camera_info_pub.getNumSubscribers() > 0) {
@@ -219,10 +246,10 @@ private:
 
     void callback(ocam::camConfig &config, uint32_t level) {
         ocam->uvc_control(config.exposure, config.gain, config.wb_blue, config.wb_red);
+        do_undistort_ = config.undistort;
     }
 
-
-public:
+  public:
     /**
 	 * @brief      { function_description }
 	 *
@@ -242,6 +269,7 @@ public:
         wb_red_ = 160;
         camera_frame_id_ = "camera";
         show_image_ = true;
+        do_undistort_ = true;
         camera_name_ = "ocam";
         device_info_ = "package://ocam/config/camera.yaml";
 
@@ -258,6 +286,7 @@ public:
         priv_nh.getParam("show_image", show_image_);
         priv_nh.getParam("camera_name", camera_name_);
         priv_nh.getParam("device_info", device_info_);
+        priv_nh.getParam("undistort", do_undistort_);
 
         /* initialize the camera */
         ocam = new Camera(device_id_, resolution_, frame_rate_);
